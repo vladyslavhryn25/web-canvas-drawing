@@ -4,37 +4,40 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Canvas Drawing App</title>
-    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ccircle cx='8' cy='8' r='6' fill='%23222'/%3E%3C/svg%3E">
+    <link rel="icon" href="data:,">
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
     <div class="app">
-        <aside class="toolbar" aria-label="Tools">
-            <button class="tool active" id="drawBtn" type="button" title="Draw (D)" aria-pressed="true">D</button>
-            <button class="tool" id="eraseBtn" type="button" title="Erase (E)" aria-pressed="false">E</button>
-            <button class="tool" id="stampBtn" type="button" title="Stamp (S)" aria-pressed="false">&#9733;</button>
-            <button class="tool action" id="undoBtn" type="button" title="Undo (Ctrl+Z)">&#8634;</button>
-            <button class="tool action" id="clearBtn" type="button" title="Clean canvas (C)">C</button>
-        </aside>
+        <div class="toolbar">
+            <button id="drawBtn" class="tool active" title="Draw">D</button>
+            <button id="eraseBtn" class="tool" title="Erase">E</button>
+            <button id="stampBtn" class="tool" title="Stamp">&#9733;</button>
+            <button id="undoBtn" class="tool" title="Undo">&#8634;</button>
+            <button id="clearBtn" class="tool" title="Clean canvas">C</button>
+        </div>
 
-        <main class="workspace">
+        <div class="main">
             <div class="controls">
-                <label class="control size-control" for="sizeInput">
-                    <span class="control-label">Size: <output id="sizeValue" for="sizeInput">8</output>px</span>
+                <div class="panel size-panel">
+                    <label for="sizeInput">Size: <span id="sizeValue">8</span>px</label>
                     <input type="range" id="sizeInput" min="1" max="60" value="8">
-                    <span class="range-ends"><span>min</span><span>max</span></span>
-                </label>
+                    <div class="range-labels">
+                        <span>min</span>
+                        <span>max</span>
+                    </div>
+                </div>
 
-                <label class="control color-control" for="colorInput">
-                    <span class="control-label">Color</span>
+                <div class="panel color-panel">
+                    <label for="colorInput">Color</label>
                     <input type="color" id="colorInput" value="#222222">
-                </label>
+                </div>
             </div>
 
-            <div class="canvas-wrap" id="canvasWrap">
-                <canvas id="canvas" aria-label="Drawing area"></canvas>
+            <div class="canvas-box">
+                <canvas id="canvas"></canvas>
             </div>
-        </main>
+        </div>
     </div>
 
     <script src="script.js"></script>

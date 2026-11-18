@@ -1,16 +1,4 @@
-'use strict';
-
-/* ==========================================================
-   Canvas Drawing App
-   Tools: pencil (D), eraser (E), stamp (S), undo, clean canvas
-   ========================================================== */
-
-const MAX_HISTORY = 50;
-const TOOLS = { DRAW: 'draw', ERASE: 'erase', STAMP: 'stamp' };
-
-// ---------- DOM ----------
 const canvas = document.getElementById('canvas');
-const canvasWrap = document.getElementById('canvasWrap');
 const ctx = canvas.getContext('2d', { willReadFrequently: true });
 
 const drawBtn = document.getElementById('drawBtn');
@@ -22,253 +10,135 @@ const sizeInput = document.getElementById('sizeInput');
 const sizeValue = document.getElementById('sizeValue');
 const colorInput = document.getElementById('colorInput');
 
-const toolButtons = {
-    [TOOLS.DRAW]: drawBtn,
-    [TOOLS.ERASE]: eraseBtn,
-    [TOOLS.STAMP]: stampBtn
-};
+let mode = 'draw';
+let isDrawing = false;
+let lastX = 0;
+let lastY = 0;
+let history = [];
 
-// ---------- State ----------
-const state = {
-    tool: TOOLS.DRAW,
-    size: Number(sizeInput.value),
-    color: colorInput.value,
-    isDrawing: false,
-    lastPoint: null,
-    history: []
-};
-
-// ---------- Canvas setup ----------
 function resizeCanvas() {
-    const dpr = window.devicePixelRatio || 1;
-    const { width, height } = canvasWrap.getBoundingClientRect();
-    const newWidth = Math.max(1, Math.floor(width * dpr));
-    const newHeight = Math.max(1, Math.floor(height * dpr));
-
-    if (canvas.width === newWidth && canvas.height === newHeight) {
-        return;
-    }
-
-    // Keep the current drawing when the canvas size changes.
-    const backup = document.createElement('canvas');
-    backup.width = canvas.width;
-    backup.height = canvas.height;
-    backup.getContext('2d').drawImage(canvas, 0, 0);
-
-    canvas.width = newWidth;
-    canvas.height = newHeight;
-
-    ctx.setTransform(1, 0, 0, 1, 0, 0);
-    ctx.drawImage(backup, 0, 0);
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    const saved = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    canvas.width = canvas.parentElement.clientWidth;
+    canvas.height = canvas.parentElement.clientHeight;
+    ctx.putImageData(saved, 0, 0);
 }
 
-function getPointerPosition(event) {
-    const rect = canvas.getBoundingClientRect();
-    return {
-        x: event.clientX - rect.left,
-        y: event.clientY - rect.top
-    };
-}
-
-// ---------- History (undo) ----------
-function saveSnapshot() {
-    state.history.push(ctx.getImageData(0, 0, canvas.width, canvas.height));
-    if (state.history.length > MAX_HISTORY) {
-        state.history.shift();
+function saveState() {
+    history.push(ctx.getImageData(0, 0, canvas.width, canvas.height));
+    if (history.length > 50) {
+        history.shift();
     }
-    updateUndoButton();
+    undoBtn.disabled = false;
 }
 
 function undo() {
-    const snapshot = state.history.pop();
-    if (!snapshot) {
+    if (history.length === 0) {
         return;
     }
+    ctx.putImageData(history.pop(), 0, 0);
+    undoBtn.disabled = history.length === 0;
+}
+
+function clearCanvas() {
+    saveState();
     ctx.clearRect(0, 0, canvas.width, canvas.height);
-    ctx.putImageData(snapshot, 0, 0);
-    updateUndoButton();
 }
 
-function updateUndoButton() {
-    undoBtn.disabled = state.history.length === 0;
-}
+function setMode(newMode) {
+    mode = newMode;
+    drawBtn.classList.remove('active');
+    eraseBtn.classList.remove('active');
+    stampBtn.classList.remove('active');
 
-// ---------- Drawing ----------
-function applyStrokeStyle() {
-    ctx.lineWidth = state.size;
-    ctx.lineCap = 'round';
-    ctx.lineJoin = 'round';
-
-    if (state.tool === TOOLS.ERASE) {
-        ctx.globalCompositeOperation = 'destination-out';
-        ctx.strokeStyle = '#000';
-        ctx.fillStyle = '#000';
+    if (mode === 'draw') {
+        drawBtn.classList.add('active');
+    } else if (mode === 'erase') {
+        eraseBtn.classList.add('active');
     } else {
-        ctx.globalCompositeOperation = 'source-over';
-        ctx.strokeStyle = state.color;
-        ctx.fillStyle = state.color;
+        stampBtn.classList.add('active');
     }
 }
 
-function drawDot(point) {
-    ctx.beginPath();
-    ctx.arc(point.x, point.y, state.size / 2, 0, Math.PI * 2);
-    ctx.fill();
+function setBrush() {
+    ctx.lineWidth = sizeInput.value;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.strokeStyle = colorInput.value;
+    ctx.fillStyle = colorInput.value;
+
+    if (mode === 'erase') {
+        ctx.globalCompositeOperation = 'destination-out';
+    } else {
+        ctx.globalCompositeOperation = 'source-over';
+    }
 }
 
-function drawLine(from, to) {
-    ctx.beginPath();
-    ctx.moveTo(from.x, from.y);
-    ctx.lineTo(to.x, to.y);
-    ctx.stroke();
-}
+function drawStar(x, y) {
+    const outer = Math.max(10, sizeInput.value * 2);
+    const inner = outer * 0.45;
 
-// Predefined monochrome stamp: a five-pointed star.
-function drawStamp(point) {
-    const outerRadius = Math.max(10, state.size * 2);
-    const innerRadius = outerRadius * 0.45;
-    const spikes = 5;
-
-    ctx.globalCompositeOperation = 'source-over';
-    ctx.fillStyle = state.color;
     ctx.beginPath();
-    for (let i = 0; i < spikes * 2; i++) {
-        const radius = i % 2 === 0 ? outerRadius : innerRadius;
-        const angle = (Math.PI / spikes) * i - Math.PI / 2;
-        const x = point.x + Math.cos(angle) * radius;
-        const y = point.y + Math.sin(angle) * radius;
-        if (i === 0) {
-            ctx.moveTo(x, y);
-        } else {
-            ctx.lineTo(x, y);
-        }
+    for (let i = 0; i < 10; i++) {
+        const r = i % 2 === 0 ? outer : inner;
+        const angle = Math.PI / 5 * i - Math.PI / 2;
+        ctx.lineTo(x + Math.cos(angle) * r, y + Math.sin(angle) * r);
     }
     ctx.closePath();
     ctx.fill();
 }
 
-// ---------- Pointer handlers ----------
-function handlePointerDown(event) {
-    if (event.button !== 0) {
-        return;
-    }
-    event.preventDefault();
+function startDrawing(e) {
+    saveState();
+    setBrush();
 
-    const point = getPointerPosition(event);
-    saveSnapshot();
-
-    if (state.tool === TOOLS.STAMP) {
-        drawStamp(point);
+    if (mode === 'stamp') {
+        drawStar(e.offsetX, e.offsetY);
         return;
     }
 
-    canvas.setPointerCapture(event.pointerId);
-    state.isDrawing = true;
-    state.lastPoint = point;
-    applyStrokeStyle();
-    drawDot(point);
+    isDrawing = true;
+    lastX = e.offsetX;
+    lastY = e.offsetY;
+
+    ctx.beginPath();
+    ctx.arc(lastX, lastY, sizeInput.value / 2, 0, Math.PI * 2);
+    ctx.fill();
 }
 
-function handlePointerMove(event) {
-    if (!state.isDrawing) {
-        return;
-    }
-    const point = getPointerPosition(event);
-    drawLine(state.lastPoint, point);
-    state.lastPoint = point;
-}
-
-function handlePointerUp(event) {
-    if (!state.isDrawing) {
-        return;
-    }
-    state.isDrawing = false;
-    state.lastPoint = null;
-    if (canvas.hasPointerCapture(event.pointerId)) {
-        canvas.releasePointerCapture(event.pointerId);
-    }
-}
-
-// ---------- Toolbar ----------
-function setTool(tool) {
-    state.tool = tool;
-    Object.entries(toolButtons).forEach(([name, button]) => {
-        const isActive = name === tool;
-        button.classList.toggle('active', isActive);
-        button.setAttribute('aria-pressed', String(isActive));
-    });
-    canvas.style.cursor = tool === TOOLS.STAMP ? 'copy' : 'crosshair';
-}
-
-function clearCanvas() {
-    saveSnapshot();
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-}
-
-function handleKeyDown(event) {
-    const target = event.target;
-    if (target instanceof HTMLInputElement) {
+function draw(e) {
+    if (!isDrawing) {
         return;
     }
 
-    if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'z') {
-        event.preventDefault();
-        undo();
-        return;
-    }
-    if (event.ctrlKey || event.metaKey || event.altKey) {
-        return;
-    }
+    ctx.beginPath();
+    ctx.moveTo(lastX, lastY);
+    ctx.lineTo(e.offsetX, e.offsetY);
+    ctx.stroke();
 
-    switch (event.key.toLowerCase()) {
-        case 'd':
-            setTool(TOOLS.DRAW);
-            break;
-        case 'e':
-            setTool(TOOLS.ERASE);
-            break;
-        case 's':
-            setTool(TOOLS.STAMP);
-            break;
-        case 'c':
-            clearCanvas();
-            break;
-        default:
-            break;
-    }
+    lastX = e.offsetX;
+    lastY = e.offsetY;
 }
 
-// ---------- Init ----------
-function bindEvents() {
-    drawBtn.addEventListener('click', () => setTool(TOOLS.DRAW));
-    eraseBtn.addEventListener('click', () => setTool(TOOLS.ERASE));
-    stampBtn.addEventListener('click', () => setTool(TOOLS.STAMP));
-    undoBtn.addEventListener('click', undo);
-    clearBtn.addEventListener('click', clearCanvas);
-
-    sizeInput.addEventListener('input', () => {
-        state.size = Number(sizeInput.value);
-        sizeValue.textContent = sizeInput.value;
-    });
-    colorInput.addEventListener('input', () => {
-        state.color = colorInput.value;
-    });
-
-    canvas.addEventListener('pointerdown', handlePointerDown);
-    canvas.addEventListener('pointermove', handlePointerMove);
-    canvas.addEventListener('pointerup', handlePointerUp);
-    canvas.addEventListener('pointercancel', handlePointerUp);
-
-    document.addEventListener('keydown', handleKeyDown);
-    window.addEventListener('resize', resizeCanvas);
+function stopDrawing() {
+    isDrawing = false;
 }
 
-function init() {
-    resizeCanvas();
-    bindEvents();
-    setTool(TOOLS.DRAW);
-    updateUndoButton();
-}
+drawBtn.addEventListener('click', () => setMode('draw'));
+eraseBtn.addEventListener('click', () => setMode('erase'));
+stampBtn.addEventListener('click', () => setMode('stamp'));
+undoBtn.addEventListener('click', undo);
+clearBtn.addEventListener('click', clearCanvas);
 
-init();
+sizeInput.addEventListener('input', () => {
+    sizeValue.textContent = sizeInput.value;
+});
+
+canvas.addEventListener('mousedown', startDrawing);
+canvas.addEventListener('mousemove', draw);
+canvas.addEventListener('mouseup', stopDrawing);
+canvas.addEventListener('mouseleave', stopDrawing);
+
+window.addEventListener('resize', resizeCanvas);
+
+resizeCanvas();
+undoBtn.disabled = true;
